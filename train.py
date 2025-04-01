@@ -163,6 +163,7 @@ model_args = dict(
     multiple_of=multiple_of,
     max_seq_len=max_seq_len,
     dropout=dropout,
+    aux_losses=MULTIPLE_TOKENS_AUX_LOSS,
 )  # start with model_args from command line
 if init_from == "scratch":
     # init a new model from scratch

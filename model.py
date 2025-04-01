@@ -271,6 +271,7 @@ class Transformer(nn.Module):
             for i in range(self.aux_losses):
                 # shift targets by i+1
                 shifted_targets = targets[:, i + 1 :].contiguous()
+            __import__('ipdb').set_trace()
                 self.multiple_token_loss.append(
                     F.cross_entropy(logits[:, i + 1 :].view(-1, logits.size(-1)), shifted_targets.view(-1), ignore_index=-1)
                 )
