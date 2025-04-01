@@ -223,6 +223,10 @@ class Transformer(nn.Module):
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
         self.output = nn.Linear(params.dim, params.vocab_size, bias=False)
 
+        self.aux_output = []
+        for i in range(params.aux_losses):
+            self.aux_output.append(nn.Linear(params.dim, params.vocab_size, bias=False))
+
         # share the unembedding parameters with the embedding parameters
         self.tok_embeddings.weight = self.output.weight  # https://paperswithcode.com/method/weight-tying
 
@@ -269,11 +273,11 @@ class Transformer(nn.Module):
 
             self.multiple_token_loss = []
             for i in range(self.aux_losses):
-                # shift targets by i+1
-                shifted_targets = targets[:, i + 1 :].contiguous()
-            __import__('ipdb').set_trace()
+                aux_logits = self.aux_output[i](h)
+                aux_logits = aux_logits[:, i + 1 :]  # shift them too to match
+                shifted_targets = targets[:, i + 1 :]
                 self.multiple_token_loss.append(
-                    F.cross_entropy(logits[:, i + 1 :].view(-1, logits.size(-1)), shifted_targets.view(-1), ignore_index=-1)
+                    F.cross_entropy(aux_logits.reshape(-1, aux_logits.size(-1)), shifted_targets.reshape(-1), ignore_index=-1)
                 )
             self.total_loss = sum([self.last_loss] + self.multiple_token_losses)
         else:
