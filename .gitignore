@@ -1,0 +1,4 @@
+# default binary for inference
+run
+data/
+exp/
