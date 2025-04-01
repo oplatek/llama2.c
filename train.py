@@ -226,17 +226,24 @@ def estimate_loss():
     model.eval()
     for split in ["train", "val"]:
         batch_iter = iter_batches(split=split)
-        losses = torch.zeros(eval_iters, MULTIPLE_TOKENS_AUX_LOSS + 1)  # keep on CPU
+        losses = torch.zeros(eval_iters, MULTIPLE_TOKENS_AUX_LOSS + 2)  # keep on CPU
         for k in range(eval_iters):
             X, Y = next(batch_iter)
             with ctx:
                 logits = model(X, Y)
                 last_loss = raw_model.last_loss
+                total_loss = raw_model.total_loss
                 multiple_token_losses = raw_model.multiple_token_losses
-            losses[k][0] = last_loss.item()
+            losses[k][0] = total_loss.item()
+            losses[k][1] = last_loss.item()
             for c, aux_loss in enumerate(multiple_token_losses):
                 losses[k, c + 1] = aux_loss.item()
-        out[split] = losses.mean()
+        # mean over whole epoch
+        epoch_losses = losses.mean(dim=0).cpu().numpy()
+        out[f"{split}/total"] = epoch_losses[0]
+        out[f"{split}/ntp"] = epoch_losses[1]
+        for c, aux_loss in enumerate(epoch_losses[2:]):
+            out[f"{split}/aux_loss_{c}"] = aux_loss[c + 2]
     model.train()
     return out
 
@@ -278,24 +285,23 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        print(f"step {iter_num}: train/total {losses['train/total']:.4f}, val/total {losses['val/total']:.4f}")
         if wandb_log:
             try:
-                wandb.log(
-                    {
-                        "iter": iter_num,
-                        "tokens": iter_num * tokens_per_iter,
-                        "loss/train": losses["train"],
-                        "loss/val": losses["val"],
-                        "lr": lr,
-                        "mfu": running_mfu * 100,  # convert to percentage
-                    },
-                    step=iter_num,
-                )
+                logdata = {
+                    "iter": iter_num,
+                    "tokens": iter_num * tokens_per_iter,
+                    "lr": lr,
+                    "mfu": running_mfu * 100,  # convert to percentage
+                }
+                d = {**logdata, **losses}
+                wandb.log(d, step=iter_num)
             except Exception as e:
                 print(f"logging to wandb failed: {e}")
-        if losses["val"] < best_val_loss or always_save_checkpoint:
-            best_val_loss = losses["val"]
+                raise e
+
+        if losses["val/total"] < best_val_loss or always_save_checkpoint:
+            best_val_loss = losses["val/total"]
             if iter_num > 0:
                 checkpoint = {
                     "model": raw_model.state_dict(),
@@ -348,7 +354,7 @@ while True:
         if local_iter_num >= 5:  # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
-        print(f"{iter_num} | loss {lossf:.4f} | lr {lr:e} | {dt*1000:.2f}ms | mfu {running_mfu*100:.2f}%")
+        print(f"{iter_num} | total L {lossf:.4f} | lr {lr:e} | {dt*1000:.2f}ms | mfu {running_mfu*100:.2f}%")
     iter_num += 1
     local_iter_num += 1
 
