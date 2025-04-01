@@ -40,7 +40,8 @@ from export import model_export
 # | OG | 288 | 6 | 6 | 6 | 256 | 15M | 1.072 | [stories15M.bin](https://huggingface.co/karpathy/tinyllamas/resolve/main/stories15M.bin) |
 # I/O
 out_dir = "out"
-MULTIPLE_TOKENS_AUX_LOSS = 0  # the baseline
+# load the parameter from environment variable if set
+MULTIPLE_TOKENS_AUX_LOSS = int(os.environ.get("AUX_LOSS", 0))  #  0 the baseline
 eval_interval = 2000
 log_interval = 1
 eval_iters = 100
@@ -48,12 +49,12 @@ eval_only = False  # if True, script exits right after the first eval
 always_save_checkpoint = False  # if True, always save a checkpoint after each eval
 init_from = "scratch"  # 'scratch' or 'resume'
 # wandb logging
-wandb_log = False  # disabled by default
-wandb_project = "llamac"
+wandb_log = os.environ.get("LOG_WB", "false").lower() == "true"  # disabled by default
+wandb_project = "bottlecap"
 wandb_run_name = "run" + datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 # data
 # batch_size = 128  # if gradient_accumulation_steps > 1, this is the micro-batch size
-batch_size = 4  # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = int(os.environ.get("BATCH_SIZE", 2))  # if gradient_accumulation_steps > 1, this is the micro-batch size
 # max_seq_len = 256
 max_seq_len = 512
 vocab_source = "llama2"  # llama2|custom; use Lllama 2 vocab from Meta, or custom trained
