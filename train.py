@@ -236,15 +236,15 @@ def estimate_loss():
                 logits = model(X, Y)
                 ntp_loss = raw_model.ntp_loss
                 total_loss = raw_model.total_loss
-                aux_lss = raw_model.n_aux_losses
-            losses[k][0] = total_loss.item()
-            losses[k][1] = ntp_loss.item()
+                aux_lss = raw_model.aux_losses
+            losses[k, 0] = total_loss.item()
+            losses[k, 1] = ntp_loss.item()
             losses[k, 2:] = aux_lss
         # mean over whole epoch
         epoch_losses = losses.mean(dim=0).cpu().numpy()
         out[f"{split}/total"] = epoch_losses[0]
         out[f"{split}/ntp"] = epoch_losses[1]
-        for c, aux_loss in enumerate(epoch_losses[2:]):
+        for c in range(epoch_losses.shape[0] - 2):
             out[f"{split}/aux_loss_{c}"] = epoch_losses[c + 2]
     model.train()
     return out
