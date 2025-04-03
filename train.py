@@ -41,7 +41,7 @@ from export import model_export
 # I/O
 out_dir = "out"
 # load the parameter from environment variable if set
-MULTIPLE_TOKENS_AUX_LOSS = int(os.environ.get("AUX_LOSS", 0))  #  0 the baseline
+aux_losses = 0  #  0 the baseline
 eval_interval = 2000
 log_interval = 1
 eval_iters = 100
@@ -54,7 +54,7 @@ wandb_project = "bottlecap"
 wandb_run_name = "run" + datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 # data
 # batch_size = 128  # if gradient_accumulation_steps > 1, this is the micro-batch size
-batch_size = int(os.environ.get("BATCH_SIZE", 2))  # if gradient_accumulation_steps > 1, this is the micro-batch size
+batch_size = 2  # if gradient_accumulation_steps > 1, this is the micro-batch size
 # max_seq_len = 256
 max_seq_len = 512
 vocab_source = "llama2"  # llama2|custom; use Lllama 2 vocab from Meta, or custom trained
@@ -163,7 +163,7 @@ model_args = dict(
     multiple_of=multiple_of,
     max_seq_len=max_seq_len,
     dropout=dropout,
-    aux_losses=MULTIPLE_TOKENS_AUX_LOSS,
+    aux_losses=aux_losses,
 )  # start with model_args from command line
 if init_from == "scratch":
     # init a new model from scratch
@@ -226,7 +226,7 @@ def estimate_loss():
     model.eval()
     for split in ["train", "val"]:
         batch_iter = iter_batches(split=split)
-        losses = torch.zeros(eval_iters, MULTIPLE_TOKENS_AUX_LOSS + 2)  # keep on CPU
+        losses = torch.zeros(eval_iters, aux_losses + 2)  # keep on CPU
         for k in range(eval_iters):
             X, Y = next(batch_iter)
             with ctx:
@@ -243,7 +243,7 @@ def estimate_loss():
         out[f"{split}/total"] = epoch_losses[0]
         out[f"{split}/ntp"] = epoch_losses[1]
         for c, aux_loss in enumerate(epoch_losses[2:]):
-            out[f"{split}/aux_loss_{c}"] = aux_loss[c + 2]
+            out[f"{split}/aux_loss_{c}"] = losses[c + 2]
     model.train()
     return out
 
