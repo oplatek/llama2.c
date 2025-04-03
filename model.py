@@ -277,7 +277,8 @@ class Transformer(nn.Module):
             # TODO vectorize/optimize
             self.aux_losses = torch.zeros(self.n_aux_losses)
 
-            self.total_loss = self.ntp_loss 
+            self.total_loss = 0
+            self.total_loss += self.ntp_loss 
             # Next i+ 1 TokenPrediction 
             for i in range(self.n_aux_losses):
                 aux_logits = self.aux_output[i](h)

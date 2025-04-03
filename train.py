@@ -330,8 +330,9 @@ while True:
             model.require_backward_grad_sync = micro_step == gradient_accumulation_steps - 1
         with ctx:
             logits = model(X, Y)
-            loss = raw_model.total_loss
-            loss = loss / gradient_accumulation_steps
+            total_loss = raw_model.total_loss
+            ntp_loss = raw_model.ntp_loss
+            loss = total_loss / gradient_accumulation_steps
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = next(train_batch_iter)
         # backward pass, with gradient scaling if training in fp16
@@ -356,7 +357,9 @@ while True:
         if local_iter_num >= 5:  # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
-        print(f"{iter_num} | total L {lossf:.4f} | lr {lr:e} | {dt*1000:.2f}ms | mfu {running_mfu*100:.2f}%")
+        print(
+            f"{iter_num} | total L {lossf:.4f} | tl {total_loss.item()} | ntp {ntp_loss.item()} | lr {lr:e} | {dt*1000:.2f}ms | mfu {running_mfu*100:.2f}%"
+        )
     iter_num += 1
     local_iter_num += 1
 
