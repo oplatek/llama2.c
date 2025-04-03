@@ -44,6 +44,8 @@ from export import model_export
 local_macbook = socket.gethostname() == "a.local"
 use_consistency_loss: int = 0  # default disabled
 use_k_ntp_loss: int = 1  # default enabled
+consistency_loss_weight: float = 0.1
+k_ntp_loss_weight: float = 0.01
 out_dir = "out"
 # load the parameter from environment variable if set
 aux_losses = 0  #  0 the baseline
@@ -169,8 +171,10 @@ model_args = dict(
     max_seq_len=max_seq_len,
     dropout=dropout,
     aux_losses=aux_losses,
-    use_consistency_loss=use_consistency_loss,
     use_k_ntp_loss=use_k_ntp_loss,
+    use_consistency_loss=use_consistency_loss,
+    k_ntp_loss_weight=k_ntp_loss_weight,
+    consistency_loss_weight=consistency_loss_weight,
 )  # start with model_args from command line
 if init_from == "scratch":
     # init a new model from scratch

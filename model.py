@@ -26,6 +26,8 @@ class ModelArgs:
     aux_losses: int = 0
     use_consistency_loss: int = 0
     use_k_ntp_loss: int = 0
+    consistency_loss_weight: float = 0.1
+    k_ntp_loss_weight: float = 0.01
 
 
 class RMSNorm(torch.nn.Module):
@@ -219,6 +221,8 @@ class Transformer(nn.Module):
         self.n_aux_losses = params.aux_losses
         self.use_consistency_loss = params.use_consistency_loss
         self.use_k_ntp_loss = params.use_k_ntp_loss
+        self.k_ntp_loss_weight = params.k_ntp_loss_weight
+        self.consistency_loss_weight = params.consistency_loss_weight
 
         self.tok_embeddings = nn.Embedding(params.vocab_size, params.dim)
         self.dropout = nn.Dropout(params.dropout)
@@ -292,7 +296,11 @@ class Transformer(nn.Module):
                 log_offset = 0
                 if self.use_k_ntp_loss:
                     shifted_targets = targets[:, i + 1 :]
-                    aux_loss_i = F.cross_entropy(aux_logits.reshape(-1, aux_logits.size(-1)), shifted_targets.reshape(-1), ignore_index=-1)
+                    aux_loss_i = (
+                        (1 / (i + 1))
+                        * self.k_ntp_loss_weight
+                        * F.cross_entropy(aux_logits.reshape(-1, aux_logits.size(-1)), shifted_targets.reshape(-1), ignore_index=-1)
+                    )
                     self.aux_losses[log_offset + i] = aux_loss_i
                     # Add auxiliary CE loss predicting the next i + 1 token
                     self.total_loss += aux_loss_i
@@ -305,7 +313,11 @@ class Transformer(nn.Module):
                     log_probs_main = F.log_softmax(main_logits, dim=-1)
                     probs_aux = F.softmax(aux_logits, dim=-1)
                     # Add KL divergence: KL(aux pred||main pred)
-                    kl_div_i = F.kl_div(log_probs_main, probs_aux, reduction="batchmean", log_target=False)
+                    kl_div_i = (
+                        (1 / (i + 1))
+                        * self.k_ntp_loss_weight
+                        * F.kl_div(log_probs_main, probs_aux, reduction="batchmean", log_target=False)
+                    )
                     self.aux_losses[log_offset + i] = kl_div_i
                     self.total_loss += kl_div_i
         else:
