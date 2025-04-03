@@ -276,15 +276,18 @@ class Transformer(nn.Module):
             # __import__('ipdb').set_trace()
             # TODO vectorize/optimize
             self.aux_losses = torch.zeros(self.n_aux_losses)
+
+            self.total_loss = self.ntp_loss 
             for i in range(self.n_aux_losses):
                 aux_logits = self.aux_output[i](h)
                 aux_logits = aux_logits[:, i + 1 :]  # shift them too to match
                 shifted_targets = targets[:, i + 1 :]
-                self.aux_losses[i] = F.cross_entropy(
+                aux_loss_i = F.cross_entropy(
                     aux_logits.reshape(-1, aux_logits.size(-1)), shifted_targets.reshape(-1), ignore_index=-1
                 )
+                self.aux_losses[i] =aux_loss_i
+                self.total_loss += aux_loss_i
 
-            self.total_loss = self.ntp_loss + self.aux_losses.sum()
         else:
             # inference-time mini-optimization: only forward the output on the very last position
             logits = self.output(h[:, [-1], :])  # note: using list [-1] to preserve the time dim
