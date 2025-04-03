@@ -41,7 +41,7 @@ from export import model_export
 # | OG | 288 | 6 | 6 | 6 | 256 | 15M | 1.072 | [stories15M.bin](https://huggingface.co/karpathy/tinyllamas/resolve/main/stories15M.bin) |
 # I/O
 
-local_macbook = socket.gethostname() == 'a.local'
+local_macbook = socket.gethostname() == "a.local"
 out_dir = "out"
 # load the parameter from environment variable if set
 aux_losses = 0  #  0 the baseline
@@ -234,19 +234,18 @@ def estimate_loss():
             X, Y = next(batch_iter)
             with ctx:
                 logits = model(X, Y)
-                last_loss = raw_model.last_loss
+                ntp_loss = raw_model.ntp_loss
                 total_loss = raw_model.total_loss
-                multiple_token_losses = raw_model.multiple_token_losses
+                aux_lss = raw_model.n_aux_losses
             losses[k][0] = total_loss.item()
-            losses[k][1] = last_loss.item()
-            for c, aux_loss in enumerate(multiple_token_losses):
-                losses[k, c + 1] = aux_loss.item()
+            losses[k][1] = ntp_loss.item()
+            losses[k, 2:] = aux_lss
         # mean over whole epoch
         epoch_losses = losses.mean(dim=0).cpu().numpy()
         out[f"{split}/total"] = epoch_losses[0]
         out[f"{split}/ntp"] = epoch_losses[1]
         for c, aux_loss in enumerate(epoch_losses[2:]):
-            out[f"{split}/aux_loss_{c}"] = losses[c + 2]
+            out[f"{split}/aux_loss_{c}"] = epoch_losses[c + 2]
     model.train()
     return out
 

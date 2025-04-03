@@ -205,15 +205,16 @@ class TransformerBlock(nn.Module):
 
 
 class Transformer(nn.Module):
-    last_loss: Optional[torch.Tensor]
     total_loss: Optional[torch.Tensor]
+    ntp_loss: Optional[torch.Tensor]
+    aux_losses: Optional[torch.Tensor]
 
     def __init__(self, params: ModelArgs):
         super().__init__()
         self.params = params
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
-        self.aux_losses = params.aux_losses
+        self.n_aux_losses = params.aux_losses
 
         self.tok_embeddings = nn.Embedding(params.vocab_size, params.dim)
         self.dropout = nn.Dropout(params.dropout)
@@ -244,9 +245,9 @@ class Transformer(nn.Module):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * params.n_layers))
 
         # Initialize attribute for the loss of the last forward call. This will be set if the forward is called with a targets tensor.
-        self.last_loss = None
-        # 2kNTP
-        self.multiple_token_losses = []
+        self.total_loss = None
+        self.ntp_loss = None
+        self.aux_losses = None
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -270,21 +271,24 @@ class Transformer(nn.Module):
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.output(h)
-            self.last_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+            self.ntp_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
 
-            self.multiple_token_loss = []
-            for i in range(self.aux_losses):
+            # __import__('ipdb').set_trace()
+            # TODO vectorize/optimize
+            self.aux_losses = torch.zeros(self.n_aux_losses)
+            for i in range(self.n_aux_losses):
                 aux_logits = self.aux_output[i](h)
                 aux_logits = aux_logits[:, i + 1 :]  # shift them too to match
                 shifted_targets = targets[:, i + 1 :]
-                self.multiple_token_loss.append(
-                    F.cross_entropy(aux_logits.reshape(-1, aux_logits.size(-1)), shifted_targets.reshape(-1), ignore_index=-1)
+                self.aux_losses[i] = F.cross_entropy(
+                    aux_logits.reshape(-1, aux_logits.size(-1)), shifted_targets.reshape(-1), ignore_index=-1
                 )
-            self.total_loss = sum([self.last_loss] + self.multiple_token_losses)
+
+            self.total_loss = self.ntp_loss + self.aux_losses.sum()
         else:
             # inference-time mini-optimization: only forward the output on the very last position
             logits = self.output(h[:, [-1], :])  # note: using list [-1] to preserve the time dim
-            self.last_loss = None
+            self.ntp_loss = None
             self.multiple_token_loss = []
             self.total_loss = None
 
