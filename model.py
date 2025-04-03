@@ -278,9 +278,10 @@ class Transformer(nn.Module):
             self.aux_losses = torch.zeros(self.n_aux_losses)
 
             self.total_loss = self.ntp_loss 
+            # Next i+ 1 TokenPrediction 
             for i in range(self.n_aux_losses):
                 aux_logits = self.aux_output[i](h)
-                aux_logits = aux_logits[:, i + 1 :]  # shift them too to match
+                aux_logits = aux_logits[:, : - (i + 1)]
                 shifted_targets = targets[:, i + 1 :]
                 aux_loss_i = F.cross_entropy(
                     aux_logits.reshape(-1, aux_logits.size(-1)), shifted_targets.reshape(-1), ignore_index=-1
