@@ -277,7 +277,7 @@ class Transformer(nn.Module):
             logits = self.output(h)
             self.ntp_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
 
-            n_aux_losses = (self.use_consistency_loss + self.use_k_ntp_loss) *  self.n_aux_losses
+            n_aux_losses = (self.use_consistency_loss + self.use_k_ntp_loss) * self.n_aux_losses
 
             self.aux_losses = torch.zeros(n_aux_losses)
             self.total_loss = 0  # will be converted to tensor once tensor will be added to the loss
@@ -300,6 +300,7 @@ class Transformer(nn.Module):
                 if self.use_consistency_loss:  #
                     # KL divergence between the standard logits and the auxiliary logits
                     main_logits = logits[:, : -(i + 1), :]  # shape: [batch, seq-i-1, vocab]
+                    main_logits = main_logits.detach()  # do not update the main logits based on this loss
                     # Convert to log probabilities
                     log_probs_main = F.log_softmax(main_logits, dim=-1)
                     probs_aux = F.softmax(aux_logits, dim=-1)
