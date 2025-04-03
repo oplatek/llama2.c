@@ -16,6 +16,7 @@ $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123
 (If your cluster does not have Infiniband interconnect prepend NCCL_IB_DISABLE=1)
 """
 
+import socket
 import math
 import os
 import time
@@ -39,6 +40,8 @@ from export import model_export
 # instead
 # | OG | 288 | 6 | 6 | 6 | 256 | 15M | 1.072 | [stories15M.bin](https://huggingface.co/karpathy/tinyllamas/resolve/main/stories15M.bin) |
 # I/O
+
+local_macbook = socket.gethostname() == 'a.local'
 out_dir = "out"
 # load the parameter from environment variable if set
 MULTIPLE_TOKENS_AUX_LOSS = int(os.environ.get("AUX_LOSS", 0))  #  0 the baseline
@@ -83,10 +86,10 @@ decay_lr = True  # whether to decay the learning rate
 warmup_iters = 1000  # how many steps to warm up for
 # system
 # device = "cuda"  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
-device = "cpu"  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+device = "cpu" if local_macbook else "cuda"  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = "bfloat16"  # float32|bfloat16|float16
 # compile = True  # use PyTorch 2.0 to compile the model to be faster
-compile = False  # use PyTorch 2.0 to compile the model to be faster
+compile = not local_macbook  # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k, v in globals().items() if not k.startswith("_") and isinstance(v, (int, float, bool, str))]
 exec(open("configurator.py").read())  # overrides from command line or config file
