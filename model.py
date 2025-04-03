@@ -223,9 +223,10 @@ class Transformer(nn.Module):
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
         self.output = nn.Linear(params.dim, params.vocab_size, bias=False)
 
-        self.aux_output = []
+        aux_output = []
         for i in range(params.aux_losses):
-            self.aux_output.append(nn.Linear(params.dim, params.vocab_size, bias=False))
+            aux_output.append(nn.Linear(params.dim, params.vocab_size, bias=False))
+        self.aux_output = torch.nn.ModuleList(aux_output)
 
         # share the unembedding parameters with the embedding parameters
         self.tok_embeddings.weight = self.output.weight  # https://paperswithcode.com/method/weight-tying
