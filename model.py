@@ -24,6 +24,8 @@ class ModelArgs:
     max_seq_len: int = 2048
     dropout: float = 0.0
     aux_losses: int = 0
+    use_consistency_loss: int = 0
+    use_k_ntp_loss: int = 0
 
 
 class RMSNorm(torch.nn.Module):
@@ -215,6 +217,8 @@ class Transformer(nn.Module):
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
         self.n_aux_losses = params.aux_losses
+        self.use_consistency_loss = params.use_consistency_loss
+        self.use_k_ntp_loss = params.use_k_ntp_loss
 
         self.tok_embeddings = nn.Embedding(params.vocab_size, params.dim)
         self.dropout = nn.Dropout(params.dropout)
@@ -273,23 +277,36 @@ class Transformer(nn.Module):
             logits = self.output(h)
             self.ntp_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
 
+            n_aux_losses = (self.use_consistency_loss + self.use_k_ntp_loss) *  self.n_aux_losses
+
+            self.aux_losses = torch.zeros(n_aux_losses)
+            self.total_loss = 0  # will be converted to tensor once tensor will be added to the loss
+
             # __import__('ipdb').set_trace()
             # TODO vectorize/optimize
-            self.aux_losses = torch.zeros(self.n_aux_losses)
-
-            self.total_loss = 0
-            self.total_loss += self.ntp_loss 
-            # Next i+ 1 TokenPrediction 
+            self.total_loss += self.ntp_loss
+            # Next i + 1 TokenPrediction
             for i in range(self.n_aux_losses):
                 aux_logits = self.aux_output[i](h)
-                aux_logits = aux_logits[:, : - (i + 1)]
-                shifted_targets = targets[:, i + 1 :]
-                aux_loss_i = F.cross_entropy(
-                    aux_logits.reshape(-1, aux_logits.size(-1)), shifted_targets.reshape(-1), ignore_index=-1
-                )
-                self.aux_losses[i] =aux_loss_i
-                self.total_loss += aux_loss_i
-
+                aux_logits = aux_logits[:, : -(i + 1)]
+                log_offset = 0
+                if self.use_k_ntp_loss:
+                    shifted_targets = targets[:, i + 1 :]
+                    aux_loss_i = F.cross_entropy(aux_logits.reshape(-1, aux_logits.size(-1)), shifted_targets.reshape(-1), ignore_index=-1)
+                    self.aux_losses[log_offset + i] = aux_loss_i
+                    # Add auxiliary CE loss predicting the next i + 1 token
+                    self.total_loss += aux_loss_i
+                    log_offset = self.n_aux_losses
+                if self.use_consistency_loss:  #
+                    # KL divergence between the standard logits and the auxiliary logits
+                    main_logits = logits[:, : -(i + 1), :]  # shape: [batch, seq-i-1, vocab]
+                    # Convert to log probabilities
+                    log_probs_main = F.log_softmax(main_logits, dim=-1)
+                    probs_aux = F.softmax(aux_logits, dim=-1)
+                    # Add KL divergence: KL(aux pred||main pred)
+                    kl_div_i = F.kl_div(log_probs_main, probs_aux, reduction="batchmean", log_target=False)
+                    self.aux_losses[log_offset + i] = kl_div_i
+                    self.total_loss += kl_div_i
         else:
             # inference-time mini-optimization: only forward the output on the very last position
             logits = self.output(h[:, [-1], :])  # note: using list [-1] to preserve the time dim
